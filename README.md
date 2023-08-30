@@ -41,6 +41,8 @@ background_image = cv2.cvtColor(background_image, cv2.COLOR_BGR2RGB)
 observed_pixels = world2image(observed_trajectory, H_inv, background_image) 
 ```
 
+The script for plotting trajectories with background (frame) extracted from the video is `plot_on_video.py`.
+
 ## Acknowledgement
 The content largely borrows from OpenTraj benchmark.
 ```
