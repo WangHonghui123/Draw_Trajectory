@@ -131,47 +131,168 @@ def plot_trajectories(true_trajs, pred_trajs, obs_length, name, plot_directory, 
         ped_index += 1
     plt.tight_layout(pad=0)
     # plt.show()
+    print()
+    plt.savefig(plot_directory + '/' + name + '.png')
+
+
+def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, plot_directory, H_inv, background):
+
+    data_len = 1
+    fig, axes = plt.subplots(1, data_len)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
+
+    # plt.subplots_adjust(bottom = 0.35, top = 0.95)
+    ax = axes
+
+    origin = true_trajs[0]
+    true_trajs = true_trajs[1:]
+    traj_length, numNodes, _ = true_trajs.shape
+
+    width = 2
+    height = 2
+
+    traj_data = {}
+    for tstep in range(obs_length, traj_length):
+        pred_pos = pred_trajs[tstep, :]
+        true_pos = true_trajs[tstep, :]
+
+        for ped in range(numNodes):
+            if ped not in traj_data:
+                traj_data[ped] = [[], []]
+
+
+            traj_data[ped][0].append(true_pos[ped, :])
+            traj_data[ped][1].append(pred_pos[ped, :])
+
+
+    # Ground Truth Trajectory
+    ped_index = 0
+    select_ped = [0]
+    for j in traj_data:
+        # if j not in select_ped:
+        #     continue
+
+        c = np.random.rand(3).tolist()
+
+        true_traj_ped = traj_data[j][0]  # List of [x,y] elements
+        pred_traj_ped = traj_data[j][1]
+        if true_traj_ped == [] or pred_traj_ped == []:
+            continue
+
+
+        true_x = [p[0] for p in true_traj_ped]
+        true_y = [p[1] for p in true_traj_ped]
+        pred_x = [p[0] for p in pred_traj_ped]
+        pred_y = [p[1] for p in pred_traj_ped]
+        origin_x = [origin[j,0]]
+        origin_y = [origin[j,1]]
+
+        observed_x = origin_x + true_x[:7]
+        observed_y = origin_y + true_y[:7]
+        ground_truth_x = true_x[7:]
+        ground_truth_y = true_y[7:]
+
+        predicted_x = pred_x[7:]
+        predicted_y = pred_y[7:]
+
+        observed_trajectory = np.zeros((len(observed_x), 2))
+        ground_truth_trajectory = np.zeros((len(ground_truth_x), 2))
+        predicted_trajectory = np.zeros((len(predicted_x), 2))
+        for i in range(len(observed_trajectory)):
+            observed_trajectory[i][1] = observed_x[i]
+            observed_trajectory[i][0] = observed_y[i]
+
+        for i in range(len(ground_truth_trajectory)):
+            ground_truth_trajectory[i][1] = ground_truth_x[i]
+            ground_truth_trajectory[i][0] = ground_truth_y[i]
+            predicted_trajectory[i][1] = predicted_x[i]
+            predicted_trajectory[i][0] = predicted_y[i]
+
+        observed_pixels = world2image(observed_trajectory, H_inv, background)  # observed_trajectory: Tx2 numpy array
+        ground_truth_pixels = world2image(ground_truth_trajectory, H_inv, background)
+        predicted_pixels = world2image(predicted_trajectory, H_inv, background)
+
+
+        extent = [0, background.shape[1], background.shape[0], 0]
+
+        ax.imshow(background, extent=extent, aspect='auto')
+        ax.plot(observed_pixels[:,0], observed_pixels[:,1], color=c, linestyle='dotted', linewidth=5,
+                label=f'true observed trajectory of {ped_index}')
+        ax.plot(ground_truth_pixels[:,0], ground_truth_pixels[:,1], color=c, linestyle='solid', linewidth=5,
+                label=f'true predicted trajectory of {ped_index}')
+        ax.plot(predicted_pixels[:,0], predicted_pixels[:,1], color=c, linestyle='dashed', linewidth=5,
+                label=f'predicted trajectory of {ped_index}')
+        ax.scatter(ground_truth_pixels[-1,0], ground_truth_pixels[-1,1], color=c, marker='o', s=100,
+                   label=f'ground truth endpoint of {ped_index}')
+        ax.scatter(predicted_pixels[-1,0], predicted_pixels[-1,1], color=c, marker='*', s=100,
+                   label=f'predicted endpoint of {ped_index}')
+
+        ax.set_xlim([0, background.shape[1]])
+        ax.set_ylim([background.shape[0], 0])
+
+        ax.axis('off')
+        # ax.axes.xaxis.set_visible(False)
+        # ax.axes.yaxis.set_visible(False)
+
+
+        # ax.axis('equal')
+        ped_index += 1
+    plt.tight_layout(pad=0)
+    # plt.show()
     # print()
     # plt.savefig(plot_directory + '/' + name + '.png')
 
 
-
 # choose your algorithm
-algorithm_name = 'ours3'
+algorithm_name = 'DDL'
 
 # Dataset name
-dataset_name = 'zara2'
+dataset_name = 'zara1'
 
 # the path to store the generated trajectory and truth trajectory
-save_directory = f'../save/{algorithm_name}/{dataset_name}/'
+save_directory = f'./all_trajectory_result/{algorithm_name}/{dataset_name}/'
 
 # load the homography matrix
-H = (np.loadtxt(os.path.join(f'./{dataset_name}/H.txt')))
+H = (np.loadtxt(os.path.join(f'./dataset_ethucy/processed_dataset/generate_homography/homography_matrix/{dataset_name}/H.txt')))
 H_inv = np.linalg.inv(H)
 
 
 # load background figure
-background_image = cv2.imread(f'./{dataset_name}/889.png')
+background_image = cv2.imread(f'./plot_on_video/{dataset_name}/video_image/1.png')
 background_image = cv2.cvtColor(background_image, cv2.COLOR_BGR2RGB)
 
-
-with open(save_directory + f'batch_pednum_{dataset_name}1.pkl', 'rb') as f:
+# load the index range between the first pedestrian and the last pedestrian for all batches
+with open(save_directory + f'batch_pednum_{dataset_name}.pkl', 'rb') as f:
     batch_pednum = pickle.load(f)
 batch_pednum = batch_pednum['batch_pednum']
-with open(save_directory + f'true_predicted_trajectory_{dataset_name}1.pkl', 'rb') as f:
+
+# load the ground truth trajectory and all sampled predicted trajectories for all batches
+with open(save_directory + f'true_predicted_trajectory_{dataset_name}.pkl', 'rb') as f:
     trajectory = pickle.load(f)
 true_trajectory = trajectory['true_traj']
 predicted_trajectory = trajectory['pred_traj']
 
+# load the best sampled predicted trajectory for all batches
+with open(save_directory + f'best_predicted_trajectory_{dataset_name}.pkl', 'rb') as f:
+    best_pred_trajectory = pickle.load(f)
+best_pred_trajectory = best_pred_trajectory['best_pred_traj']
+
 # Plot directory (the plot of the trajectory is stored here)
-plot_directory = f'./{dataset_name}/plot/{algorithm_name}'
-if not os.path.exists(plot_directory):
-    os.makedirs(plot_directory)
+plot_directory = f'./plot_on_video/{dataset_name}/plot_trajectory_on_image/'
+multi_plot_directory = plot_directory + 'multi'
+if not os.path.exists(multi_plot_directory):
+    os.makedirs(multi_plot_directory)
+
+best_plot_directory = plot_directory + 'best'
+if not os.path.exists(best_plot_directory):
+    os.makedirs(best_plot_directory)
 
 withBackground = 0
 test_len = len(true_trajectory)
 count = 0
-pick_scene = [839]
+if_pick_scene = False
+if_ploy_multimodality = False
+pick_scene = [0]
 for i in range(test_len):
     st_ed = get_st_ed(batch_pednum[i])
     len_st_ed = len(st_ed)
@@ -181,12 +302,28 @@ for i in range(test_len):
         st = st_ed[j][0]
         ed = st_ed[j][1]
         batch_true_trajectory = true_trajectory[i][:, st:ed, :]
-        batch_predicted_trajectory = predicted_trajectory[i][:, st:ed, :]
-        # plot_trajectories(batch_true_trajectory, batch_predicted_trajectory, 0, name, plot_directory,
-        #                   H_inv, background_image)  # This is the core
-        if count in pick_scene:
-            plot_trajectories(batch_true_trajectory, batch_predicted_trajectory, 0, name, plot_directory,
-                              H_inv, background_image)  # This is the core
+        batch_predicted_trajectory = predicted_trajectory[i][:, :, st:ed, :]
+        batch_best_pred_trajectory = best_pred_trajectory[i][:, st:ed, :]
+        if if_pick_scene:
+            if count in pick_scene:
+                if if_ploy_multimodality:
+                    plot_trajectories_multimodality(batch_true_trajectory, batch_predicted_trajectory, 0, name, multi_plot_directory,
+                          H_inv, background_image)  # This is the core
+                else:
+                    plot_trajectories(batch_true_trajectory, batch_best_pred_trajectory, 0, name, best_plot_directory,
+                                  H_inv, background_image)  # This is the core
+        else:
+            if if_ploy_multimodality:
+                plot_trajectories_multimodality(batch_true_trajectory, batch_predicted_trajectory, 0, name,
+                                                multi_plot_directory,
+                                                H_inv, background_image)  # This is the core
+            else:
+                plot_trajectories(batch_true_trajectory, batch_best_pred_trajectory, 0, name, best_plot_directory,
+                                  H_inv, background_image)  # This is the core
+
+        # if count in pick_scene:
+        #     plot_trajectories(batch_true_trajectory, batch_predicted_trajectory, 0, name, plot_directory,
+        #                       H_inv, background_image)  # This is the core
         count += 1
 
 
