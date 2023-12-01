@@ -153,7 +153,7 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
 
     traj_data = {}
     for tstep in range(obs_length, traj_length):
-        pred_pos = pred_trajs[tstep, :]
+        pred_pos = pred_trajs[:, tstep, :]
         true_pos = true_trajs[tstep, :]
 
         for ped in range(numNodes):
@@ -162,7 +162,7 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
 
 
             traj_data[ped][0].append(true_pos[ped, :])
-            traj_data[ped][1].append(pred_pos[ped, :])
+            traj_data[ped][1].append(pred_pos[:, ped, :])
 
 
     # Ground Truth Trajectory
@@ -172,7 +172,11 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
         # if j not in select_ped:
         #     continue
 
-        c = np.random.rand(3).tolist()
+        c1 = np.random.rand(3).tolist()
+        c2 = np.random.rand(3).tolist()
+        c3 = np.random.rand(3).tolist()
+        c4 = np.random.rand(3).tolist()
+        c5 = np.random.rand(3).tolist()
 
         true_traj_ped = traj_data[j][0]  # List of [x,y] elements
         pred_traj_ped = traj_data[j][1]
@@ -182,8 +186,8 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
 
         true_x = [p[0] for p in true_traj_ped]
         true_y = [p[1] for p in true_traj_ped]
-        pred_x = [p[0] for p in pred_traj_ped]
-        pred_y = [p[1] for p in pred_traj_ped]
+        pred_x = [p[:, 0] for p in pred_traj_ped]
+        pred_y = [p[:, 1] for p in pred_traj_ped]
         origin_x = [origin[j,0]]
         origin_y = [origin[j,1]]
 
@@ -197,7 +201,7 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
 
         observed_trajectory = np.zeros((len(observed_x), 2))
         ground_truth_trajectory = np.zeros((len(ground_truth_x), 2))
-        predicted_trajectory = np.zeros((len(predicted_x), 2))
+        predicted_trajectory = np.zeros((len(predicted_x), 2, 20))
         for i in range(len(observed_trajectory)):
             observed_trajectory[i][1] = observed_x[i]
             observed_trajectory[i][0] = observed_y[i]
@@ -205,27 +209,34 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
         for i in range(len(ground_truth_trajectory)):
             ground_truth_trajectory[i][1] = ground_truth_x[i]
             ground_truth_trajectory[i][0] = ground_truth_y[i]
-            predicted_trajectory[i][1] = predicted_x[i]
-            predicted_trajectory[i][0] = predicted_y[i]
+            predicted_trajectory[i][1] = predicted_x[i].cpu()
+            predicted_trajectory[i][0] = predicted_y[i].cpu()
+        predicted_trajectory = np.transpose(predicted_trajectory, (2, 0, 1))
 
         observed_pixels = world2image(observed_trajectory, H_inv, background)  # observed_trajectory: Tx2 numpy array
         ground_truth_pixels = world2image(ground_truth_trajectory, H_inv, background)
-        predicted_pixels = world2image(predicted_trajectory, H_inv, background)
+
+        predicted_pixels = np.zeros_like(predicted_trajectory)
+        for i in range(len(predicted_trajectory)):
+            predicted_pixels[i] = world2image(predicted_trajectory[i], H_inv, background)
 
 
         extent = [0, background.shape[1], background.shape[0], 0]
 
         ax.imshow(background, extent=extent, aspect='auto')
-        ax.plot(observed_pixels[:,0], observed_pixels[:,1], color=c, linestyle='dotted', linewidth=5,
+        ax.plot(observed_pixels[:,0], observed_pixels[:,1], color=c1, linestyle='dotted', linewidth=5,
                 label=f'true observed trajectory of {ped_index}')
-        ax.plot(ground_truth_pixels[:,0], ground_truth_pixels[:,1], color=c, linestyle='solid', linewidth=5,
+        ax.plot(ground_truth_pixels[:-1,0], ground_truth_pixels[:-1,1], color=c2, linestyle='dashed', linewidth=5,
                 label=f'true predicted trajectory of {ped_index}')
-        ax.plot(predicted_pixels[:,0], predicted_pixels[:,1], color=c, linestyle='dashed', linewidth=5,
+
+        for i in range(len(predicted_trajectory)):
+            ax.plot(predicted_pixels[i,:-1,0], predicted_pixels[i,:-1,1], color=c3, linestyle='solid', linewidth=2,
                 label=f'predicted trajectory of {ped_index}')
-        ax.scatter(ground_truth_pixels[-1,0], ground_truth_pixels[-1,1], color=c, marker='o', s=100,
+            ax.scatter(predicted_pixels[:, -1, 0], predicted_pixels[:, -1, 1], color=c4, marker='*', s=30,
+                       label=f'predicted endpoint of {ped_index}')
+
+        ax.scatter(ground_truth_pixels[-1,0], ground_truth_pixels[-1,1], color=c5, marker='o', s=30,
                    label=f'ground truth endpoint of {ped_index}')
-        ax.scatter(predicted_pixels[-1,0], predicted_pixels[-1,1], color=c, marker='*', s=100,
-                   label=f'predicted endpoint of {ped_index}')
 
         ax.set_xlim([0, background.shape[1]])
         ax.set_ylim([background.shape[0], 0])
@@ -236,10 +247,11 @@ def plot_trajectories_multimodality(true_trajs, pred_trajs, obs_length, name, pl
 
 
         # ax.axis('equal')
+        plt.show()
         ped_index += 1
     plt.tight_layout(pad=0)
-    # plt.show()
-    # print()
+    plt.show()
+    print()
     # plt.savefig(plot_directory + '/' + name + '.png')
 
 
@@ -291,7 +303,7 @@ withBackground = 0
 test_len = len(true_trajectory)
 count = 0
 if_pick_scene = False
-if_ploy_multimodality = False
+if_ploy_multimodality = True
 pick_scene = [0]
 for i in range(test_len):
     st_ed = get_st_ed(batch_pednum[i])
